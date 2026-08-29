@@ -27,7 +27,12 @@ async function run() {
       const result = await promptsCollection.find().toArray();
       res.send(result || {});
     })
-    
+    app.get('/api/prompts/:id', async (req, res)=> {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const result = await promptsCollection.findOne(query)
+      res.send(result || {});
+    })
     app.get('/api/my/prompts', async (req, res)=> {
       const query={};
       if(req.query.userId){
