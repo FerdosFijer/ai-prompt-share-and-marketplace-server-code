@@ -22,6 +22,7 @@ async function run() {
     await client.connect();
     const db = client.db("Aiverse_db");
     const promptsCollection = db.collection("prompts");
+    const plansCollection = db.collection("plans");
 
     app.get('/api/prompts', async (req, res)=> {
       const result = await promptsCollection.find().toArray();
@@ -55,6 +56,14 @@ async function run() {
         res.send(result)
     })
 
+    app.get('/api/plans', async (req, res)=>{
+      const query ={}
+      if (req.query.plan_id){
+        query.id = req.query.plan_id;
+      }
+      const result = await plansCollection.findOne(query);
+      res.send(result || {});
+    })
 
 
     await client.db("admin").command({ ping: 1 });
