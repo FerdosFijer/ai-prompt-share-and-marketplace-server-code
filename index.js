@@ -23,6 +23,7 @@ async function run() {
     const db = client.db("Aiverse_db");
     const promptsCollection = db.collection("prompts");
     const plansCollection = db.collection("plans");
+    const subscriptionCollection = db.collection("subscriptions");
 
     app.get('/api/prompts', async (req, res)=> {
       const result = await promptsCollection.find().toArray();
@@ -63,6 +64,16 @@ async function run() {
       }
       const result = await plansCollection.findOne(query);
       res.send(result || {});
+    })
+
+    app.post ('/api/subscriptions', async (req, res)=>{
+      const data = req.body;
+      const subsInfo = {
+        ...data,
+        createdAt: new Date()
+      }
+      const result = await subscriptionCollection.insertOne(subsInfo);
+      res.send(result);
     })
 
 
