@@ -21,6 +21,7 @@ async function run() {
   try {
     await client.connect();
     const db = client.db("Aiverse_db");
+    const usersCollection = db.collection("user");
     const promptsCollection = db.collection("prompts");
     const plansCollection = db.collection("plans");
     const subscriptionCollection = db.collection("subscriptions");
@@ -56,6 +57,18 @@ async function run() {
         const result = await promptsCollection.insertOne(newPromt);
         res.send(result)
     })
+    app.patch('/api/prompts/:id', async (req, res)=> {
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)};
+      const updateDoc = {
+        $set: req.body
+      }
+       const result = await promptsCollection.updateOne(filter, updateDoc);
+       res.send(result);
+    })
+
+
+    /* ---------Plans--------- */
 
     app.get('/api/plans', async (req, res)=>{
       const query ={}
@@ -74,6 +87,16 @@ async function run() {
       }
       const result = await subscriptionCollection.insertOne(subsInfo);
       res.send(result);
+
+      //update user plan information
+      const filter ={email: data.email};
+      const updateDocument ={
+        $set: {
+          plan:data.planId,
+        },
+      };
+      const updateResult = await usersCollection.updateOne(filter, updateDocument);
+      res.send(updateResult);
     })
 
 
