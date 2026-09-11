@@ -25,6 +25,7 @@ async function run() {
     const promptsCollection = db.collection("prompts");
     const plansCollection = db.collection("plans");
     const subscriptionCollection = db.collection("subscriptions");
+    const reviewCollection = db.collection("reviews");
 
     app.get('/api/user', async (req, res) => {
       const cursor = usersCollection.find();
@@ -70,7 +71,7 @@ async function run() {
       res.send(result || {});
     })
     app.get('/api/featured', async (req, res) => {
-      const result = await promptsCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
+      const result = await promptsCollection.find().sort({ createdAt: 1 }).limit(6).toArray();
       res.send(result || []);
     })
     app.get('/api/my/prompts', async (req, res) => {
@@ -82,16 +83,17 @@ async function run() {
         query.status = req.query.status;
       }
       const result = await promptsCollection.find(query).toArray();
-      res.send(result || {});
+      res.send(result || []);
     })
 
     app.post('/api/prompts', async (req, res) => {
-      const Promt = req.body;
-      const newPromt = {
-        ...Promt,
-        createdAt: new Date()
+      const Prompt = req.body;
+      const newPrompt = {
+        ...Prompt,
+        createdAt: new Date(),
+        status: Prompt.status || "pending",
       }
-      const result = await promptsCollection.insertOne(newPromt);
+      const result = await promptsCollection.insertOne(newPrompt);
       res.send(result)
     })
     app.patch('/api/prompts/:id', async (req, res) => {
@@ -164,6 +166,107 @@ async function run() {
       res.send(updateResult);
     })
 
+    /* ------- Review  -------- */
+    app.get('/api/reviews', async (req, res) => {
+      try {
+        const { promptId } = req.query;
+
+        if (!promptId) {
+          return res.status(400).send({
+            message: "promptId is required."
+          });
+        }
+
+        const result = await reviewCollection.aggregate([
+          {
+            $match: {
+              promptId: promptId
+            }
+          },
+
+          {
+            $lookup: {
+              from: "user",
+              let: {
+                reviewUserId: "$userId"
+              },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $eq: [
+                        "$_id",
+                        { $toObjectId: "$$reviewUserId" }
+                      ]
+                    }
+                  }
+                },
+                {
+                  $project: {
+                    name: 1,
+                    email: 1,
+                    image: 1
+                  }
+                }
+              ],
+              as: "userInfo"
+            }
+          },
+
+          {
+            $unwind: {
+              path: "$userInfo",
+              preserveNullAndEmptyArrays: true
+            }
+          },
+
+          {
+            $project: {
+              _id: 1,
+              promptId: 1,
+              userId: 1,
+              rating: 1,
+              comment: 1,
+              createdAt: 1,
+              userInfo: 1
+            }
+          },
+
+          {
+            $sort: {
+              createdAt: -1
+            }
+          }
+
+        ]).toArray();
+
+        res.send(result);
+
+      } catch (error) {
+        console.error(error);
+
+        res.status(500).send({
+          message: "Failed to get reviews."
+        });
+      }
+    });
+    app.post('/api/reviews', async (req, res) => {
+      const { promptId, userId, rating, comment } = req.body;
+      if (!promptId || !userId || !rating || !comment) {
+        return res.status(400).send({
+          message: "All fields are required."
+        });
+      }
+      const newReview = {
+        promptId,
+        userId,
+        rating: Number(rating),
+        comment,
+        createdAt: new Date()
+      };
+      const result = await reviewCollection.insertOne(newReview);
+      res.status(201).send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
