@@ -24,6 +24,8 @@ const client = new MongoClient(uri, {
 // async function run() {
 //   try {
 //     await client.connect();
+client.connect(() => {'connecting to Mongo db'}).catch(console.dir);
+
     const db = client.db("Aiverse_db");
     const usersCollection = db.collection("user");
     const promptsCollection = db.collection("prompts");
