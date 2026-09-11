@@ -9,6 +9,10 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 app.use(cors())
 app.use(express.json())
 
+const logger = (req, res, next) => {
+  console.log('logger logged', req.params);
+  next();
+}
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -26,14 +30,67 @@ async function run() {
     const plansCollection = db.collection("plans");
     const subscriptionCollection = db.collection("subscriptions");
     const reviewCollection = db.collection("reviews");
+    const sessionCollection = db.collection("session");
 
-    app.get('/api/user', async (req, res) => {
+    // verification related
+    const verifyToken = async (req, res, next) => {
+      const authHeader = req?.headers?.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "Unauthorized access" })
+      }
+      const token = authHeader.split(' ')[1]
+      if (!token) {
+        return res.status(401).send({ message: "Unauthorized access" })
+      }
+      const query = {token: token}
+      const session = await sessionCollection.findOne(query);
+      if (!session) {
+        return res.status(401).send({ message: "Unauthorized access" })
+      }
+      const userId = session.userId;
+      const userQuery = {
+        _id: userId
+      }
+      const user = await usersCollection.findOne(userQuery);
+      if (!user) {
+        return res.status(401).send({ message: "Unauthorized access" })
+      }
+      req.user = user;
+      next();
+    }
+
+    const verifySeeker = async (req, res, next) =>{
+      if(req.user?.role !== 'user'){
+        return res.status(403).send({message: 'forbidden access'})
+      }
+      next();
+    }
+    const verifyCreator = async (req, res, next) =>{
+      if(req.user?.role !== 'creator'){
+        return res.status(403).send({message: 'forbidden access'})
+      }
+      next();
+    }
+    const verifyAdmin = async (req, res, next) =>{
+      if(req.user?.role !== 'admin'){
+        return res.status(403).send({message: 'forbidden access'})
+      }
+      next();
+    }
+
+
+
+
+
+
+
+    app.get('/api/user',logger, verifyToken, async (req, res) => {
       const cursor = usersCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
 
-    app.patch('/api/user/:id/role', async (req, res) => {
+    app.patch('/api/user/:id/role', logger, verifyToken,  async (req, res) => {
       const { id } = req.params;
       const { role } = req.body;
 
@@ -60,21 +117,21 @@ async function run() {
       res.send(result);
     });
 
-    app.get('/api/prompts', async (req, res) => {
+    app.get('/api/prompts', logger, verifyToken, async (req, res) => {
       const result = await promptsCollection.find().toArray();
       res.send(result || {});
     })
-    app.get('/api/prompts/:id', async (req, res) => {
+    app.get('/api/prompts/:id',logger, verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
       const result = await promptsCollection.findOne(query)
       res.send(result || {});
     })
     app.get('/api/featured', async (req, res) => {
-      const result = await promptsCollection.find().sort({ createdAt: 1 }).limit(6).toArray();
+      const result = await promptsCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
       res.send(result || []);
     })
-    app.get('/api/my/prompts', async (req, res) => {
+    app.get('/api/my/prompts',logger, verifyToken, async (req, res) => {
       const query = {};
       if (req.query.userId) {
         query.userId = req.query.userId;
@@ -96,7 +153,7 @@ async function run() {
       const result = await promptsCollection.insertOne(newPrompt);
       res.send(result)
     })
-    app.patch('/api/prompts/:id', async (req, res) => {
+    app.patch('/api/prompts/:id',logger, verifyToken, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
@@ -115,7 +172,7 @@ async function run() {
 
     /* ---------Plans--------- */
 
-    app.get('/api/plans', async (req, res) => {
+    app.get('/api/plans',logger, verifyToken, async (req, res) => {
       const query = {}
       if (req.query.plan_id) {
         query.id = req.query.plan_id;
@@ -125,7 +182,7 @@ async function run() {
     })
 
 
-    app.get('/api/subscriptions', async (req, res) => {
+    app.get('/api/subscriptions', logger, verifyToken, async (req, res) => {
       const result = await subscriptionCollection.aggregate([
         {
           $lookup: {
@@ -147,7 +204,7 @@ async function run() {
     });
 
 
-    app.post('/api/subscriptions', async (req, res) => {
+    app.post('/api/subscriptions', logger, verifyToken, async (req, res) => {
       const data = req.body;
       const subsInfo = {
         ...data,
@@ -167,7 +224,7 @@ async function run() {
     })
 
     /* ------- Review  -------- */
-    app.get('/api/reviews', async (req, res) => {
+    app.get('/api/reviews',logger, verifyToken, async (req, res) => {
       try {
         const { promptId } = req.query;
 
